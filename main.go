@@ -10,30 +10,34 @@ import (
 )
 
 const (
-	CURSOR = "█"
+	CURSOR = "|"
+	QUOTE  = "No problem can be solved from the same level of consciousness that created it. We must see the world anew. No problem can be solved from the same level of consciousness that created it. We must see the world anew. No problem can be solved from the same level of consciousness that created it. We must see the world anew."
 )
 
 var (
-	QUOTE_STYLE = lipgloss.NewStyle().Bold(true).BorderStyle(lipgloss.NormalBorder()).
+	QUOTE_STYLE = lipgloss.NewStyle().BorderStyle(lipgloss.NormalBorder()).
 			BorderForeground(lipgloss.Color("63")).Width(70)
 
 	CORRECT_STYLE   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#AFE1AF"))
 	INCORRECT_STYLE = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#C70039"))
-	CURSOR_STYLE    = lipgloss.NewStyle().Blink(true)
 )
 
 type model struct {
-	curQuote             string
-	cursor               int
-	incorrectIndexLength [][2]int
+	currentQuoteWords []string
+	letterTracker     []string
+	cursor            int
+	curWord           int
 }
 
 func initialModel() model {
-	quote := `No problem can be solved from the same level of consciousness that created it. We must see the world anew. No problem can be solved from the same level of consciousness that created it. We must see the world anew. No problem can be solved from the same level of consciousness that created it. We must see the world anew.`
+	currQuoteWords := strings.Split(QUOTE, " ")
+	icWords := make([]string, len(currQuoteWords))
+
 	return model{
-		curQuote:             quote,
-		cursor:               0,
-		incorrectIndexLength: [][2]int{},
+		currentQuoteWords: currQuoteWords,
+		letterTracker:     icWords,
+		cursor:            0,
+		curWord:           0,
 	}
 }
 
@@ -41,70 +45,80 @@ func (m model) Init() tea.Cmd {
 	return tea.Batch(tea.EnterAltScreen)
 }
 
-func (m model) View() string {
-	var s strings.Builder
-
-	if len(m.incorrectIndexLength) > 0 {
-		var tmp strings.Builder
-		startIdx := 0
-		for _, item := range m.incorrectIndexLength {
-			index := item[0]
-			length := item[1]
-			tmp.WriteString(CORRECT_STYLE.Render(m.curQuote[startIdx:index]) + INCORRECT_STYLE.Render(m.curQuote[index:index+length]))
-			startIdx = index + length
-		}
-
-		s.WriteString(QUOTE_STYLE.Render(tmp.String() + CORRECT_STYLE.Render(m.curQuote[startIdx:m.cursor]) + CURSOR_STYLE.Render(CURSOR) + m.curQuote[min(len(m.curQuote)-1, m.cursor+1):]))
-	} else {
-		if m.cursor > 0 {
-			s.WriteString(QUOTE_STYLE.Render(CORRECT_STYLE.Render(m.curQuote[:m.cursor]) + CURSOR_STYLE.Render(CURSOR) + m.curQuote[min(len(m.curQuote)-1, m.cursor+1):]))
-		} else {
-			s.WriteString(QUOTE_STYLE.Render(m.curQuote[:m.cursor] + CURSOR_STYLE.Render(CURSOR) + m.curQuote[min(len(m.curQuote)-1, m.cursor+1):]))
-		}
-	}
-	return s.String()
-}
-
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
-
-	// Is it a key press?
 	case tea.KeyMsg:
-
-		// Cool, what was the actual key pressed?
-		switch msg.String() {
-
-		// These keys should exit the program.
-		case "ctrl+c":
+		switch msg.Type {
+		case tea.KeyCtrlC:
 			return m, tea.Quit
-		case "backspace":
+		case tea.KeyBackspace:
 			if m.cursor > 0 {
 				m.cursor--
 			}
 			return m, nil
-		}
-		if len(msg.String()) > 1 {
+		case tea.KeySpace:
+			if m.curWord < len(m.currentQuoteWords)-1 {
+				accumulatedLen := 0
+				for i := m.curWord - 1; i >= 0; i-- {
+					if len(m.letterTracker[i]) > len(m.currentQuoteWords[i]) {
+						accumulatedLen += len(m.letterTracker[i]) + 1
+					} else {
+						accumulatedLen += len(m.currentQuoteWords[i]) + 1
+					}
+				}
+				if len(m.letterTracker[m.curWord]) > len(m.currentQuoteWords[m.curWord]) {
+					accumulatedLen += len(m.letterTracker[m.curWord])
+				} else {
+					accumulatedLen += len(m.currentQuoteWords[m.curWord])
+				}
+				m.cursor += accumulatedLen - m.cursor + 1
+				m.curWord++
+			}
 			return m, nil
 		}
-
-		if byte(msg.String()[0]) != m.curQuote[m.cursor] {
-			if len(m.incorrectIndexLength) == 0 {
-				m.incorrectIndexLength = append(m.incorrectIndexLength, [2]int{m.cursor, 1})
-			} else {
-				if m.incorrectIndexLength[len(m.incorrectIndexLength)-1][0] == m.cursor-1 {
-					m.incorrectIndexLength[len(m.incorrectIndexLength)-1][1]++
-				} else {
-					m.incorrectIndexLength = append(m.incorrectIndexLength, [2]int{m.cursor, 1})
-				}
+		if len(msg.String()) == 1 {
+			if len(m.letterTracker[m.curWord]) > len(m.currentQuoteWords[m.curWord])+3 {
+				return m, nil
 			}
-		}
-		m.cursor++
-		if m.cursor == len(m.curQuote) {
-			return m, tea.Quit
+			m.cursor++
+			m.letterTracker[m.curWord] += msg.String()
 		}
 	}
-
 	return m, nil
+}
+
+func (m model) View() string {
+	var s strings.Builder
+	joinedStr := strings.Trim(strings.Join(m.currentQuoteWords, " "), " ")
+
+	var formattedString strings.Builder
+	excessLen := 0
+
+	for i := 0; i <= m.curWord; i++ {
+		for idx, rn := range m.letterTracker[i] {
+			if idx < len(m.currentQuoteWords[i]) {
+				if byte(rn) != m.currentQuoteWords[i][idx] {
+					formattedString.WriteString(INCORRECT_STYLE.Render(string(rn)))
+				} else {
+					formattedString.WriteString(CORRECT_STYLE.Render(string(rn)))
+				}
+			} else {
+				formattedString.WriteString(INCORRECT_STYLE.Render(string(rn)))
+			}
+		}
+		if len(m.letterTracker[i]) >= len(m.currentQuoteWords[i]) {
+			excessLen += len(m.letterTracker[i]) - len(m.currentQuoteWords[i])
+			if i != m.curWord {
+				formattedString.WriteString(" ")
+			}
+		}
+
+	}
+
+	fmt.Print(excessLen)
+	fmt.Print(formattedString.String())
+	s.WriteString(QUOTE_STYLE.Render(formattedString.String() + CURSOR + joinedStr[m.cursor-excessLen:]))
+	return s.String()
 }
 
 func main() {
