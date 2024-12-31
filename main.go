@@ -53,9 +53,30 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		case tea.KeyBackspace:
 			if m.cursor > 0 {
-				m.cursor--
+				if len(m.letterTracker[m.curWord]) > 0 {
+					m.letterTracker[m.curWord] = m.letterTracker[m.curWord][:len(m.letterTracker[m.curWord])-1]
+					m.cursor--
+				} else if m.curWord > 0 {
+					m.curWord--
+
+					accumulatedLen := 0
+					for i := 0; i < m.curWord; i++ {
+						wordLen := len(m.currentQuoteWords[i])
+						if len(m.letterTracker[i]) > wordLen {
+							wordLen = len(m.letterTracker[i])
+						}
+						accumulatedLen += wordLen + 1
+					}
+
+					if len(m.letterTracker[m.curWord]) > 0 {
+						accumulatedLen += len(m.letterTracker[m.curWord])
+					}
+
+					m.cursor = accumulatedLen
+				}
 			}
 			return m, nil
+
 		case tea.KeySpace:
 			if m.curWord < len(m.currentQuoteWords)-1 {
 				accumulatedLen := 0
@@ -111,12 +132,12 @@ func (m model) View() string {
 			if i != m.curWord {
 				formattedString.WriteString(" ")
 			}
+		} else if i != m.curWord {
+			formattedString.WriteString(m.currentQuoteWords[i][len(m.letterTracker[i]):])
+			formattedString.WriteString(" ")
 		}
-
 	}
 
-	fmt.Print(excessLen)
-	fmt.Print(formattedString.String())
 	s.WriteString(QUOTE_STYLE.Render(formattedString.String() + CURSOR + joinedStr[m.cursor-excessLen:]))
 	return s.String()
 }
