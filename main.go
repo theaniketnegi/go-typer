@@ -75,7 +75,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 
 		case tea.KeySpace:
-			if m.isFinished {
+			if m.isFinished || len(m.letterTracker[m.curWord]) == 0 {
 				return m, nil
 			}
 
@@ -83,6 +83,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.cursor += m.accumulatedLen + max(len(m.letterTracker[m.curWord]), len(m.currentQuoteWords[m.curWord])) - m.cursor + 1
 				m.accumulatedLen += max(len(m.letterTracker[m.curWord]), len(m.currentQuoteWords[m.curWord])) + 1
 				m.curWord++
+			} else {
+				m.isFinished = true
 			}
 
 			return m, nil
