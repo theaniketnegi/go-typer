@@ -68,7 +68,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.cursor--
 				} else if m.curWord > 0 {
 					m.curWord--
-					m.accumulatedLen -= len(m.letterTracker[m.curWord]) + 1
+					m.accumulatedLen -= max(len(m.currentQuoteWords[m.curWord]), len(m.letterTracker[m.curWord])) + 1
 					m.cursor = m.accumulatedLen
 					if len(m.letterTracker[m.curWord]) > 0 {
 						m.cursor += len(m.letterTracker[m.curWord])
