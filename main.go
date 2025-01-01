@@ -18,8 +18,9 @@ var (
 	QUOTE_STYLE = lipgloss.NewStyle().BorderStyle(lipgloss.NormalBorder()).
 			BorderForeground(lipgloss.Color("63")).Width(70)
 
-	CORRECT_STYLE   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#AFE1AF"))
-	INCORRECT_STYLE = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#C70039"))
+	CORRECT_STYLE      = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#AFE1AF"))
+	INCORRECT_STYLE    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#C70039"))
+	MISSING_UNDERLINED = lipgloss.NewStyle().Underline(true)
 )
 
 type model struct {
@@ -29,6 +30,7 @@ type model struct {
 	curWord           int
 	isFinished        bool
 	accumulatedLen    int
+	totalKeystrokes   int
 }
 
 func initialModel() model {
@@ -42,6 +44,7 @@ func initialModel() model {
 		curWord:           0,
 		isFinished:        false,
 		accumulatedLen:    0,
+		totalKeystrokes:   0,
 	}
 }
 
@@ -97,7 +100,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if len(m.letterTracker[m.curWord]) > len(m.currentQuoteWords[m.curWord])+3 {
 				return m, nil
 			}
-
+			m.totalKeystrokes++
 			if m.curWord == len(m.currentQuoteWords)-1 && m.cursor == m.accumulatedLen+len(m.currentQuoteWords[m.curWord])-1 && msg.String() == string(m.currentQuoteWords[m.curWord][len(m.currentQuoteWords[m.curWord])-1]) {
 				m.isFinished = true
 			}
@@ -136,7 +139,7 @@ func (m model) View() string {
 					formattedString.WriteString(" ")
 				}
 			} else if i != m.curWord {
-				formattedString.WriteString(m.currentQuoteWords[i][len(m.letterTracker[i]):])
+				formattedString.WriteString(MISSING_UNDERLINED.Render(m.currentQuoteWords[i][len(m.letterTracker[i]):]))
 				formattedString.WriteString(" ")
 			}
 		}
