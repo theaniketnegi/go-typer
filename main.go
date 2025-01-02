@@ -157,9 +157,9 @@ func (m model) View() string {
 			for idx, rn := range m.letterTracker[i] {
 				if idx < len(m.currentQuoteWords[i]) {
 					if byte(rn) != m.currentQuoteWords[i][idx] {
-						formattedString.WriteString(INCORRECT_STYLE.Render(string(rn)))
+						formattedString.WriteString(INCORRECT_STYLE.Render(string(m.currentQuoteWords[i][idx])))
 					} else {
-						formattedString.WriteString(CORRECT_STYLE.Render(string(rn)))
+						formattedString.WriteString(CORRECT_STYLE.Render(string(m.currentQuoteWords[i][idx])))
 					}
 				} else {
 					formattedString.WriteString(INCORRECT_STYLE.Render(string(rn)))
