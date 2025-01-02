@@ -11,7 +11,7 @@ import (
 
 const (
 	CURSOR = "|"
-	QUOTE  = "No problem can be solved from the same level of consciousness that created it. We must see the world anew."
+	QUOTE  = "Hello world"
 )
 
 var (
@@ -31,6 +31,9 @@ type model struct {
 	isFinished        bool
 	accumulatedLen    int
 	totalKeystrokes   int
+	correctKeystrokes int
+	missingKeystrokes int
+	accuracy          float32
 }
 
 func initialModel() model {
@@ -45,11 +48,38 @@ func initialModel() model {
 		isFinished:        false,
 		accumulatedLen:    0,
 		totalKeystrokes:   0,
+		correctKeystrokes: 0,
+		missingKeystrokes: 0,
+		accuracy:          0.,
 	}
 }
 
 func (m model) Init() tea.Cmd {
 	return tea.Batch(tea.EnterAltScreen)
+}
+
+func (m model) EvaluateResult(typedLastLetter bool) model {
+	for i := 0; i < len(m.currentQuoteWords); i++ {
+		for idx := range m.letterTracker[i] {
+			if idx >= len(m.currentQuoteWords[i]) {
+				break
+			}
+			if m.currentQuoteWords[i][idx] == m.letterTracker[i][idx] {
+				m.correctKeystrokes++
+			}
+		}
+
+		letterTrackerLen := len(m.letterTracker[i])
+		if typedLastLetter && i == len(m.currentQuoteWords)-1 {
+			letterTrackerLen++ //+1 for last letter of last word
+		}
+
+		if len(m.currentQuoteWords[i]) > letterTrackerLen {
+			m.missingKeystrokes += (len(m.currentQuoteWords[i]) - len(m.letterTracker[i]))
+		}
+	}
+	m.isFinished = true
+	return m
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -87,7 +117,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.accumulatedLen += max(len(m.letterTracker[m.curWord]), len(m.currentQuoteWords[m.curWord])) + 1
 				m.curWord++
 			} else {
-				m.isFinished = true
+				m = m.EvaluateResult(false)
+				m.accuracy = float32(m.correctKeystrokes) / float32(m.totalKeystrokes+m.missingKeystrokes) * 100
 			}
 
 			return m, nil
@@ -101,12 +132,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			m.totalKeystrokes++
-			if m.curWord == len(m.currentQuoteWords)-1 && m.cursor == m.accumulatedLen+len(m.currentQuoteWords[m.curWord])-1 && msg.String() == string(m.currentQuoteWords[m.curWord][len(m.currentQuoteWords[m.curWord])-1]) {
-				m.isFinished = true
-			}
 
-			m.cursor++
+			if m.curWord == len(m.currentQuoteWords)-1 && m.cursor == m.accumulatedLen+len(m.currentQuoteWords[m.curWord])-1 && msg.String() == string(m.currentQuoteWords[m.curWord][len(m.currentQuoteWords[m.curWord])-1]) {
+				m = m.EvaluateResult(true)
+				m.correctKeystrokes += 1 // For the final character
+				m.accuracy = float32(m.correctKeystrokes) / float32(m.totalKeystrokes+m.missingKeystrokes) * 100
+			}
 			m.letterTracker[m.curWord] += msg.String()
+			m.cursor++
 		}
 	}
 	return m, nil
@@ -114,7 +147,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m model) View() string {
 	var s strings.Builder
-
 	if !m.isFinished {
 		joinedStr := strings.Trim(strings.Join(m.currentQuoteWords, " "), " ")
 
@@ -146,7 +178,7 @@ func (m model) View() string {
 
 		s.WriteString(QUOTE_STYLE.Render(formattedString.String() + CURSOR + joinedStr[m.cursor-excessLen:]))
 	} else {
-		s.WriteString("KYS")
+		s.WriteString(fmt.Sprintf("Accuracy: %.2f%%\nCorrect: %d/Incorrect: %d/Missing: %d", m.accuracy, m.correctKeystrokes, m.totalKeystrokes-m.correctKeystrokes, m.missingKeystrokes))
 	}
 	return s.String()
 }
