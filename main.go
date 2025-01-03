@@ -4,14 +4,16 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
+	"github.com/charmbracelet/bubbles/stopwatch"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
 
 const (
 	CURSOR = "|"
-	QUOTE  = "Hello world"
+	QUOTE  = "Programming isn't about what you know; it's about what you can figure out. Every challenge is an opportunity to learn, and every line of code brings you closer to mastering the art of problem-solving. Type away, and let logic guide your fingers!"
 )
 
 var (
@@ -24,6 +26,7 @@ var (
 )
 
 type model struct {
+	isStarted         bool
 	currentQuoteWords []string
 	letterTracker     []string
 	cursor            int
@@ -34,6 +37,8 @@ type model struct {
 	correctKeystrokes int
 	missingKeystrokes int
 	accuracy          float32
+	stopwatch         stopwatch.Model
+	finalTime         time.Duration
 }
 
 func initialModel() model {
@@ -41,6 +46,7 @@ func initialModel() model {
 	icWords := make([]string, len(currQuoteWords))
 
 	return model{
+		isStarted:         false,
 		currentQuoteWords: currQuoteWords,
 		letterTracker:     icWords,
 		cursor:            0,
@@ -51,7 +57,13 @@ func initialModel() model {
 		correctKeystrokes: 0,
 		missingKeystrokes: 0,
 		accuracy:          0.,
+		stopwatch:         stopwatch.NewWithInterval(time.Millisecond),
+		finalTime:         0,
 	}
+}
+
+func FormatDuration(d time.Duration) string {
+	return fmt.Sprintf("%.2fs", d.Seconds())
 }
 
 func (m model) Init() tea.Cmd {
@@ -59,6 +71,8 @@ func (m model) Init() tea.Cmd {
 }
 
 func (m model) EvaluateResult(typedLastLetter bool) model {
+	m.finalTime = m.stopwatch.Elapsed()
+	m.stopwatch.Stop()
 	for i := 0; i < len(m.currentQuoteWords); i++ {
 		for idx := range m.letterTracker[i] {
 			if idx >= len(m.currentQuoteWords[i]) {
@@ -83,6 +97,8 @@ func (m model) EvaluateResult(typedLastLetter bool) model {
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+	m.stopwatch, cmd = m.stopwatch.Update(msg)
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.Type {
@@ -90,7 +106,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		case tea.KeyBackspace:
 			if m.isFinished {
-				return m, nil
+				return m, cmd
 			}
 			if m.cursor > 0 {
 				if len(m.letterTracker[m.curWord]) > 0 {
@@ -105,11 +121,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 				}
 			}
-			return m, nil
+			return m, cmd
 
 		case tea.KeySpace:
 			if m.isFinished || len(m.letterTracker[m.curWord]) == 0 {
-				return m, nil
+				return m, cmd
 			}
 
 			if m.curWord < len(m.currentQuoteWords)-1 {
@@ -121,15 +137,21 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.accuracy = float32(m.correctKeystrokes) / float32(m.totalKeystrokes+m.missingKeystrokes) * 100
 			}
 
-			return m, nil
+			return m, cmd
 		}
 
 		if m.isFinished {
-			return m, nil
+			return m, cmd
 		}
+
+		if !m.isStarted {
+			m.isStarted = true
+			cmd = m.stopwatch.Start()
+		}
+
 		if len(msg.String()) == 1 {
 			if len(m.letterTracker[m.curWord]) > len(m.currentQuoteWords[m.curWord])+3 {
-				return m, nil
+				return m, cmd
 			}
 			m.totalKeystrokes++
 
@@ -142,7 +164,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.cursor++
 		}
 	}
-	return m, nil
+	return m, cmd
 }
 
 func (m model) View() string {
@@ -175,10 +197,10 @@ func (m model) View() string {
 				formattedString.WriteString(" ")
 			}
 		}
-
-		s.WriteString(QUOTE_STYLE.Render(formattedString.String() + CURSOR + joinedStr[m.cursor-excessLen:]))
+		s.WriteString(QUOTE_STYLE.Render(FormatDuration(m.stopwatch.Elapsed()) + "\n" + formattedString.String() + CURSOR + joinedStr[m.cursor-excessLen:]))
 	} else {
-		s.WriteString(fmt.Sprintf("Accuracy: %.2f%%\nCorrect: %d/Incorrect: %d/Missing: %d", m.accuracy, m.correctKeystrokes, m.totalKeystrokes-m.correctKeystrokes, m.missingKeystrokes))
+		s.WriteString(QUOTE_STYLE.Render(fmt.Sprintf("WPM:%.1f\nAccuracy: %.2f%%\nCorrect: %d/Incorrect: %d/Missing: %d", float64(m.correctKeystrokes)/
+			(5*m.finalTime.Minutes()), m.accuracy, m.correctKeystrokes, m.totalKeystrokes-m.correctKeystrokes, m.missingKeystrokes)))
 	}
 	return s.String()
 }
