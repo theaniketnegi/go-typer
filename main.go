@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/bubbles/help"
+	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/stopwatch"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -13,12 +15,12 @@ import (
 
 const (
 	CURSOR = "|"
-	QUOTE  = "Programming isn't about what you know; it's about what you can figure out. Every challenge is an opportunity to learn, and every line of code brings you closer to mastering the art of problem-solving. Type away, and let logic guide your fingers!"
+	QUOTE  = "the quick brown fox jumps over the lazy dog"
 )
 
 var (
 	QUOTE_STYLE = lipgloss.NewStyle().BorderStyle(lipgloss.NormalBorder()).
-			BorderForeground(lipgloss.Color("63")).Width(70)
+			BorderForeground(lipgloss.Color("63")).Width(50).Padding(1)
 
 	CORRECT_STYLE      = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#AFE1AF"))
 	INCORRECT_STYLE    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#C70039"))
@@ -26,6 +28,8 @@ var (
 )
 
 type model struct {
+	windowWidth       int
+	windowHeight      int
 	isStarted         bool
 	currentQuoteWords []string
 	letterTracker     []string
@@ -39,6 +43,13 @@ type model struct {
 	accuracy          float32
 	stopwatch         stopwatch.Model
 	finalTime         time.Duration
+	keymap            keymap
+	help              help.Model
+}
+
+type keymap struct {
+	reset key.Binding
+	quit  key.Binding
 }
 
 func initialModel() model {
@@ -59,6 +70,18 @@ func initialModel() model {
 		accuracy:          0.,
 		stopwatch:         stopwatch.NewWithInterval(time.Millisecond),
 		finalTime:         0,
+		keymap: keymap{
+			reset: key.NewBinding(
+				key.WithKeys("ctrl+r"),
+				key.WithHelp("ctrl+r", "reset"),
+			),
+			quit: key.NewBinding(
+				key.WithKeys("ctrl+c"),
+				key.WithHelp("ctrl+c", "quit"),
+			),
+		},
+
+		help: help.New(),
 	}
 }
 
@@ -100,8 +123,20 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	m.stopwatch, cmd = m.stopwatch.Update(msg)
 	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.windowHeight = msg.Height
+		m.windowWidth = msg.Width
+		return m, cmd
 	case tea.KeyMsg:
 		switch msg.Type {
+		case tea.KeyCtrlR:
+			if !m.isStarted {
+				return m, cmd
+			}
+			initModel := initialModel()
+			initModel.windowHeight = m.windowHeight
+			initModel.windowWidth = m.windowWidth
+			return initModel, cmd
 		case tea.KeyCtrlC:
 			return m, tea.Quit
 		case tea.KeyBackspace:
@@ -167,6 +202,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
+func (m model) helpView() string {
+	return "\n" + m.help.ShortHelpView([]key.Binding{
+		m.keymap.reset,
+		m.keymap.quit,
+	})
+}
+
 func (m model) View() string {
 	var s strings.Builder
 	if !m.isFinished {
@@ -202,7 +244,7 @@ func (m model) View() string {
 		s.WriteString(QUOTE_STYLE.Render(fmt.Sprintf("WPM:%.1f\nAccuracy: %.2f%%\nCorrect: %d/Incorrect: %d/Missing: %d", float64(m.correctKeystrokes)/
 			(5*m.finalTime.Minutes()), m.accuracy, m.correctKeystrokes, m.totalKeystrokes-m.correctKeystrokes, m.missingKeystrokes)))
 	}
-	return s.String()
+	return lipgloss.Place(m.windowWidth, m.windowHeight, lipgloss.Center, lipgloss.Center, s.String()+m.helpView())
 }
 
 func main() {
